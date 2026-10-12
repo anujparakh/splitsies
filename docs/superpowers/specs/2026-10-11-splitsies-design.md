@@ -10,7 +10,7 @@ free tier.
 ## Goals
 
 - One group, 2–3 named users (initially "Ruchi" and "Anuj").
-- Record expenses: amount, description, date, who paid, who shares the cost.
+- Record expenses: amount, description, category, date, who paid, who shares the cost.
 - Show each person's net balance and a minimal list of who owes whom.
 - Record settlements so balances can be cleared after a real-world payback.
 - Password-gated, per-user passwords, session persisted in a cookie, with sign-out.
@@ -23,7 +23,8 @@ Explicitly out of scope, to be revisited only if a real need appears:
 
 - Multiple groups, user self-registration, invitations, or roles.
 - Receipt photos, comments, reminders, notifications, email.
-- Recurring expenses, categories, budgets, reports, charts.
+- Recurring expenses, budgets, reports, charts. Expenses carry a category for
+  at-a-glance scanning, but nothing aggregates or reports on it.
 - Percentage or exact-amount splits (see "Split model" below).
 - Non-USD currencies, currency conversion.
 - Password reset or change flows in the UI (passwords are set by an operator SQL
@@ -83,6 +84,9 @@ users (
 expenses (
   id           INTEGER PRIMARY KEY,
   description  TEXT    NOT NULL,
+  -- One of the ids in CATEGORIES (shared/categories.ts). Stored as text, not a
+  -- foreign key: the set is a fixed part of the UI, not user data.
+  category     TEXT    NOT NULL DEFAULT 'food',
   amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
   date         TEXT    NOT NULL,           -- "YYYY-MM-DD", the day of the expense
   paid_by      INTEGER NOT NULL REFERENCES users(id),
