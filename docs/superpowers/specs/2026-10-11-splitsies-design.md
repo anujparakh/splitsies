@@ -26,7 +26,8 @@ Explicitly out of scope, to be revisited only if a real need appears:
 - Recurring expenses, categories, budgets, reports, charts.
 - Percentage or exact-amount splits (see "Split model" below).
 - Non-USD currencies, currency conversion.
-- Password reset or change flows (passwords are rotated by an operator SQL command).
+- Password reset or change flows in the UI (passwords are set by an operator SQL
+  command, documented in `DEPLOYMENT.md`).
 
 ## Architecture
 
@@ -75,7 +76,7 @@ balances drift. Conversion to a dollar string happens only at the display edge.
 users (
   id            INTEGER PRIMARY KEY,
   name          TEXT    NOT NULL UNIQUE,
-  password_hash TEXT    NOT NULL,          -- "pbkdf2$<iters>$<salt_b64>$<hash_b64>"
+  password_hash TEXT    NOT NULL UNIQUE,   -- base64url HMAC-SHA256(password, PASSWORD_PEPPER)
   created_at    TEXT    NOT NULL           -- ISO-8601 UTC
 );
 
@@ -166,22 +167,38 @@ Not worth another line of code here.
 
 ## Authentication
 
-**Credentials.** `users.name` plus a PBKDF2-SHA256 password hash, stored in D1 and
-seeded by a migration. Adding a third person is one `INSERT`, no redeploy. Hashes are
-stored in the self-describing form `pbkdf2$<iterations>$<salt_b64>$<hash_b64>` with a
-per-user 16-byte random salt, so the iteration count can be raised later without
-breaking existing rows.
+**Credentials: the password alone identifies the user.** There is no username field.
+Login sends only a password; the server hashes it and looks up whichever user owns
+that hash. Each person has their own distinct password, seeded by a migration, and
+adding a third person is one `INSERT` with no redeploy.
 
-**Decision: PBKDF2 via WebCrypto, with the iteration count tuned to the free-tier CPU
-limit.** bcrypt/scrypt/argon2 are unavailable in Workers without shipping WASM. The
-Workers free plan allows 10 ms CPU per request, and PBKDF2 is deliberately
-CPU-expensive, so the iteration count must be **benchmarked in a real Worker during
-implementation** and set to the highest value that leaves login comfortably under
-~6 ms. The measured number and date go in `CLAUDE.md`. This is an explicit, documented
-trade-off of hash strength against a platform limit; it is acceptable because the
-threat model is narrow (see below).
+**Decision: hashes are `base64url(HMAC-SHA256(password, PASSWORD_PEPPER))`**, where
+`PASSWORD_PEPPER` is a Worker secret, with a `UNIQUE` index on `password_hash`.
 
-**Decision: password comparison uses a constant-time check** on the derived bits.
+Because the password must *identify* the user, the hash has to be deterministic — a
+per-user salt is unusable when you don't yet know which user you're dealing with. That
+rules out PBKDF2-with-salt and makes login a single indexed
+`SELECT ... WHERE password_hash = ?`: one cheap crypto operation, no iteration over
+users, and CPU time in the microseconds rather than anywhere near the free plan's
+10 ms ceiling.
+
+The secret pepper is what carries the security here, and it covers the threat that
+actually matters: an attacker who obtains the D1 contents gets a column of HMACs that
+cannot be attacked offline at all without a secret held only in Cloudflare's secret
+store. A plain salted SHA-256 would instead hand them a brute-forceable target. The
+accepted costs, both deliberate:
+
+- **No two users may share a password** — the `UNIQUE` index enforces this, and
+  seeding a duplicate fails loudly rather than silently shadowing a user.
+- **Rotating `PASSWORD_PEPPER` invalidates every password**, requiring all hashes to
+  be reseeded. Documented in `DEPLOYMENT.md`.
+- **No key stretching.** If the pepper leaks *together with* the database, passwords
+  fall quickly to a dictionary attack. This is accepted under the threat model below;
+  the mitigation is to use passwords that aren't dictionary words.
+
+**Decision: login returns `401` with the same generic message whether the password
+matched no user or was malformed**, so the response never reveals whether a given
+password belongs to somebody.
 
 **Sessions.** Login sets a stateless **HMAC-SHA256 signed cookie**:
 
@@ -205,9 +222,12 @@ will be opened.
 
 **Threat model.** This protects a small private expense list from casual internet
 discovery and from the merely curious. It is not hardened against a determined
-attacker. Accepted gaps: no rate limiting on login (Cloudflare sits in front; three
-users), no password reset flow, no 2FA, no per-session revocation, no CSRF token
-(mitigated by `SameSite=Lax` plus JSON-only request bodies).
+attacker. Accepted gaps: no key stretching on the password hash (see above), no rate
+limiting on login (Cloudflare sits in front; three users), no password reset flow, no
+2FA, no per-session revocation, no CSRF token (mitigated by `SameSite=Lax` plus
+JSON-only request bodies). Because a single password is the whole credential, it
+should be long and not a dictionary word — `DEPLOYMENT.md` recommends a generated
+passphrase.
 
 ## API
 
@@ -216,7 +236,7 @@ round trip keeps it feeling instant.
 
 | Method & path             | Purpose                                                                 |
 | ------------------------- | ----------------------------------------------------------------------- |
-| `POST /api/login`         | `{name, password}` → sets session cookie, returns `me`.                 |
+| `POST /api/login`         | `{password}` → identifies the user, sets session cookie, returns `me`.  |
 | `POST /api/logout`        | Clears the cookie.                                                      |
 | `GET /api/state`          | `{me, users, expenses, settlements, balances}` — everything to render.   |
 | `POST /api/expenses`      | Create. Returns fresh state.                                            |
@@ -254,9 +274,12 @@ return `401`. Unknown ids return `404`. The client surfaces `error` verbatim.
 Mobile-first; a single column that simply centres and gains breathing room on wider
 screens. Two views.
 
-**Login.** App name, a user picker (two or three name buttons — nicer on a phone than
-typing a name), a password field, and a sign-in button. Errors appear inline and are
-deliberately vague ("Incorrect password").
+**Login.** App name, a single password field (auto-focused, `type="password"`,
+submits on Enter), and a sign-in button. No username field — the password identifies
+the person, so the login screen reveals nothing about who uses the app. A failure
+shows an inline, deliberately uninformative "Incorrect password." On success the app
+greets the user by the name the password resolved to, confirming the right identity
+was picked up.
 
 **Home.**
 
@@ -338,7 +361,8 @@ genuinely costly.
 **Integration (`@cloudflare/vitest-pool-workers`, against a real D1):**
 
 - `/api/state` without a cookie → `401`.
-- Login with a wrong password → `401`; correct → `200` plus a `Set-Cookie`.
+- Login with an unrecognised password → `401`; each user's own password → `200`,
+  a `Set-Cookie`, and the correct user identity resolved from the password alone.
 - A forged or truncated cookie signature → `401`.
 - Create an expense → it appears in state with correct splits and balances.
 - Edit an expense → splits are replaced, not duplicated.
@@ -352,7 +376,7 @@ persistence across a browser restart, and the add-expense flow one-handed.
 ## Deliverables
 
 - The application, deployable with `wrangler deploy`.
-- `CLAUDE.md` — architecture, conventions, commands, and the recorded decisions,
-  including the benchmarked PBKDF2 iteration count.
+- `CLAUDE.md` — architecture, conventions, commands, and the recorded decisions.
 - `DEPLOYMENT.md` — D1 creation and migration, secret generation, user seeding,
-  custom-domain setup, and how to add a user or rotate a password later.
+  custom-domain setup, and how to add a user, change a password, or rotate the pepper
+  later.
