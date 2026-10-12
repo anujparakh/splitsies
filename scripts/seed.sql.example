@@ -1,0 +1,21 @@
+-- Splitsies user seeding.
+--
+-- Copy this file, fill in real hashes, and run it. Do NOT commit the filled-in
+-- copy: the hashes are password equivalents.
+--
+-- Generate each hash with the same pepper you set as the PASSWORD_PEPPER secret:
+--
+--   node scripts/hash-password.mjs "<pepper>" "<that-user's-password>"
+--
+-- Then apply it:
+--
+--   wrangler d1 execute splitsies --remote --file ./scripts/seed.sql   # production
+--   wrangler d1 execute splitsies --local  --file ./scripts/seed.sql   # local dev
+--
+-- Every user needs a DIFFERENT password: the password alone identifies the
+-- user at login, and `password_hash` is UNIQUE. A duplicate fails loudly here
+-- rather than silently making one of the two users unreachable.
+
+INSERT INTO users (name, password_hash, created_at) VALUES
+  ('Anuj',  'REPLACE_WITH_ANUJ_HASH',  datetime('now')),
+  ('Ruchi', 'REPLACE_WITH_RUCHI_HASH', datetime('now'));
