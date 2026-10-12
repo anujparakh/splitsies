@@ -6,3 +6,4 @@ dist/
 dist/
 worker-configuration.d.ts
 scripts/seed.sql
+tsconfig.tsbuildinfo
