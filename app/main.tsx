@@ -1,4 +1,8 @@
 import { createRoot } from "react-dom/client";
+import { App } from "./App";
+import "./styles.css";
 
-// Placeholder: replaced by <App /> in the UI task.
-createRoot(document.getElementById("root")!).render(<p>Splitsies</p>);
+const root = document.getElementById("root");
+if (!root) throw new Error("#root missing from index.html");
+
+createRoot(root).render(<App />);
