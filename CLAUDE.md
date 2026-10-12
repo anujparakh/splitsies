@@ -9,9 +9,10 @@ single group of 2–3 friends. It exists because Splitwise moved the features th
 group actually used behind a paywall.
 
 It is deliberately small. Before adding anything, check the "Non-Goals" section
-of the design doc: multiple groups, receipts, categories, reports, recurring
-expenses, and non-USD currencies are all explicitly out of scope. The value of
-this codebase is that it stays comprehensible.
+of the design doc: multiple groups, receipts, reports, budgets, recurring
+expenses, and non-USD currencies are all explicitly out of scope. Expenses do
+carry a category, but nothing aggregates or reports on it. The value of this
+codebase is that it stays comprehensible.
 
 **Design doc:** `docs/superpowers/specs/2026-10-11-splitsies-design.md` — the
 authority on what the app does and why. Every non-obvious decision is recorded
@@ -69,6 +70,8 @@ migrations/0001_init.sql    The schema. Add a new numbered file; never edit this
 shared/                     Imported by BOTH the Worker and the client
   types.ts                  The API contract. The single source of truth for shapes.
   money.ts                  Cents ↔ dollar-string conversion
+  categories.ts             The fixed expense categories (ids + labels)
+  accents.ts                The six accent colour ids + labels
 
 src/                        The Worker
   index.ts                  Hono route wiring. No business logic.
@@ -86,10 +89,12 @@ app/                        The React client
   api.ts                    Typed fetch wrapper
   styles.css                Design tokens and all styling
   components/               Login, BalanceCard, ActivityFeed, Sheet,
-                            ExpenseSheet, SettleSheet
+                            ExpenseSheet, SettleSheet, CategoryIcon
+    icons.tsx               GENERATED — do not edit; see scripts/generate-icons.mjs
 
 scripts/
   hash-password.mjs         Generates a password hash for seeding a user
+  generate-icons.mjs        Regenerates app/components/icons.tsx from Phosphor
   seed.sql.example          Template for seeding users
 
 tests/                      money, split, balances, api
@@ -136,6 +141,31 @@ of which have a helper or a note in the code:
 **`noUncheckedIndexedAccess` is on,** so `array[0]` is `T | undefined`. This is
 the most common source of type errors here. `verbatimModuleSyntax` is also on:
 type-only imports must use `import type`.
+
+## Categories and accent colours
+
+**Categories** are a fixed set in `shared/categories.ts`, stored on the expense
+as plain text (not a foreign key — the set is part of the interface, not user
+data). Defaults to `food`, both in the form and as the column default, so an
+expense can never have no category. `CategoryIcon.tsx` maps each id to an icon
+through a `Record<CategoryId, …>`, so adding a category without an icon is a
+type error rather than a blank space.
+
+**Accents** are six colours in `shared/accents.ts`, chosen per user and stored
+in the database so the choice follows someone between devices. Only the id is
+shared; the palettes live in `app/styles.css` under `:root[data-accent="…"]`,
+each with its own light and dark values. `App.tsx` applies the current user's
+accent to `<html>`. Every component reads the accent tokens, so a new theme
+needs no component changes. The one duplication is `SWATCH_COLOR` in `App.tsx`,
+which must track the light-mode hex values — a swatch has to show the colour it
+*would* apply, so it cannot read the token currently in effect.
+
+**Icons** are generated, not imported. `app/components/icons.tsx` is a
+generated file: edit `scripts/generate-icons.mjs` and re-run
+`node scripts/generate-icons.mjs`. See the spec for why.
+
+Any new colour must clear WCAG AA (4.5:1) against both its button text and its
+card background, in light and dark. The spec records the measured ratios.
 
 ## Authentication
 

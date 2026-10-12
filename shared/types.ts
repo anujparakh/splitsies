@@ -10,9 +10,16 @@
  * in `src/db.ts` and nowhere else.
  */
 
+import type { AccentId } from "./accents";
+import type { CategoryId } from "./categories";
+
+export type { AccentId, CategoryId };
+
 export interface User {
   id: number;
   name: string;
+  /** This person's chosen accent colour. See `shared/accents.ts`. */
+  accent: AccentId;
 }
 
 export interface ExpenseSplit {
@@ -24,6 +31,8 @@ export interface ExpenseSplit {
 export interface Expense {
   id: number;
   description: string;
+  /** One of the ids in `shared/categories.ts`. Always present on a response. */
+  category: CategoryId;
   amountCents: number;
   /** Calendar day, `YYYY-MM-DD`. */
   date: string;
@@ -87,6 +96,12 @@ export interface AppState {
 /** Body of `POST /api/expenses` and `PUT /api/expenses/:id`. */
 export interface ExpenseInput {
   description: string;
+  /**
+   * Optional: omitting it stores `DEFAULT_CATEGORY`. Optional rather than
+   * required so the default lives on the server as well as in the form, and a
+   * caller that doesn't care about categories still gets a valid expense.
+   */
+  category?: CategoryId;
   amountCents: number;
   date: string;
   paidBy: number;
@@ -100,6 +115,11 @@ export interface SettlementInput {
   toUser: number;
   amountCents: number;
   date: string;
+}
+
+/** Body of `POST /api/accent`. */
+export interface AccentInput {
+  accent: AccentId;
 }
 
 /** Body of `POST /api/login`. The password alone identifies the user. */

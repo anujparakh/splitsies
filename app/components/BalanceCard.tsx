@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Balances, Transfer, User } from "../../shared/types";
 import { formatUsd } from "../../shared/money";
+import { SettledUpIcon } from "./icons";
 
 interface BalanceCardProps {
   me: User;
@@ -19,7 +20,8 @@ export function BalanceCard({ me, users, balances, onSettle }: BalanceCardProps)
 
   if (balances.transfers.length === 0) {
     return (
-      <div className="balance-card">
+      <div className="balance-card balance-card-settled">
+        <SettledUpIcon size={28} />
         <p className="all-settled">All settled up</p>
       </div>
     );

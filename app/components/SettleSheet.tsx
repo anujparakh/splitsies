@@ -53,7 +53,7 @@ export function SettleSheet({ users, initial, onSubmit, onClose }: SettleSheetPr
 
   return (
     <Sheet title="Settle up" onClose={onClose}>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <form onSubmit={handleSubmit} className="sheet-form">
         <div className="sentence-row">
           <select
             aria-label="Who paid"

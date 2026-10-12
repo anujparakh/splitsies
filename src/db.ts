@@ -2,6 +2,7 @@
  * All SQL lives here, and this is the only file that maps snake_case D1
  * columns to the camelCase fields defined in `shared/types.ts`.
  */
+import type { AccentId } from "../shared/accents";
 import type {
   Expense,
   ExpenseInput,
@@ -10,11 +11,23 @@ import type {
   SettlementInput,
   User,
 } from "../shared/types";
+import { DEFAULT_ACCENT, isAccentId } from "../shared/accents";
+import { DEFAULT_CATEGORY, isCategoryId } from "../shared/categories";
 import { splitEqually } from "./lib/split";
 
 interface UserRow {
   id: number;
   name: string;
+  accent: string;
+}
+
+/** Narrows a stored accent, falling back rather than trusting the column. */
+function toUser(row: UserRow): User {
+  return {
+    id: row.id,
+    name: row.name,
+    accent: isAccentId(row.accent) ? row.accent : DEFAULT_ACCENT,
+  };
 }
 
 interface UserRowWithHash extends UserRow {
@@ -24,6 +37,7 @@ interface UserRowWithHash extends UserRow {
 interface ExpenseRow {
   id: number;
   description: string;
+  category: string;
   amount_cents: number;
   date: string;
   paid_by: number;
@@ -48,17 +62,17 @@ interface SettlementRow {
 
 export async function listUsers(db: D1Database): Promise<User[]> {
   const { results } = await db
-    .prepare("SELECT id, name FROM users ORDER BY id ASC")
+    .prepare("SELECT id, name, accent FROM users ORDER BY id ASC")
     .all<UserRow>();
-  return results.map((r) => ({ id: r.id, name: r.name }));
+  return results.map(toUser);
 }
 
 export async function findUserById(db: D1Database, id: number): Promise<User | null> {
   const row = await db
-    .prepare("SELECT id, name FROM users WHERE id = ?")
+    .prepare("SELECT id, name, accent FROM users WHERE id = ?")
     .bind(id)
     .first<UserRow>();
-  return row ? { id: row.id, name: row.name } : null;
+  return row ? toUser(row) : null;
 }
 
 export async function findUserByPasswordHash(
@@ -66,17 +80,29 @@ export async function findUserByPasswordHash(
   hash: string,
 ): Promise<User | null> {
   const row = await db
-    .prepare("SELECT id, name, password_hash FROM users WHERE password_hash = ?")
+    .prepare("SELECT id, name, accent, password_hash FROM users WHERE password_hash = ?")
     .bind(hash)
     .first<UserRowWithHash>();
-  return row ? { id: row.id, name: row.name } : null;
+  return row ? toUser(row) : null;
+}
+
+/** Sets a user's accent colour. */
+export async function updateUserAccent(
+  db: D1Database,
+  userId: number,
+  accent: AccentId,
+): Promise<void> {
+  await db
+    .prepare("UPDATE users SET accent = ? WHERE id = ?")
+    .bind(accent, userId)
+    .run();
 }
 
 export async function listExpenses(db: D1Database): Promise<Expense[]> {
   const [expensesResult, splitsResult] = await Promise.all([
     db
       .prepare(
-        "SELECT id, description, amount_cents, date, paid_by, created_by, created_at FROM expenses ORDER BY date DESC, created_at DESC, id DESC",
+        "SELECT id, description, category, amount_cents, date, paid_by, created_by, created_at FROM expenses ORDER BY date DESC, created_at DESC, id DESC",
       )
       .all<ExpenseRow>(),
     db
@@ -94,6 +120,10 @@ export async function listExpenses(db: D1Database): Promise<Expense[]> {
   return expensesResult.results.map((row) => ({
     id: row.id,
     description: row.description,
+    // Narrow the stored text back to a known id. A row written by a future
+    // version with a category this build doesn't know falls back rather than
+    // handing the client a value its types say is impossible.
+    category: isCategoryId(row.category) ? row.category : DEFAULT_CATEGORY,
     amountCents: row.amount_cents,
     date: row.date,
     paidBy: row.paid_by,
@@ -130,9 +160,17 @@ export async function createExpense(
 
   const inserted = await db
     .prepare(
-      "INSERT INTO expenses (description, amount_cents, date, paid_by, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+      "INSERT INTO expenses (description, category, amount_cents, date, paid_by, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
     )
-    .bind(input.description, input.amountCents, input.date, input.paidBy, createdBy, createdAt)
+    .bind(
+      input.description,
+      input.category ?? DEFAULT_CATEGORY,
+      input.amountCents,
+      input.date,
+      input.paidBy,
+      createdBy,
+      createdAt,
+    )
     .first<{ id: number }>();
 
   if (!inserted) throw new Error("failed to insert expense row");
@@ -172,9 +210,16 @@ export async function updateExpense(
   await db.batch([
     db
       .prepare(
-        "UPDATE expenses SET description = ?, amount_cents = ?, date = ?, paid_by = ? WHERE id = ?",
+        "UPDATE expenses SET description = ?, category = ?, amount_cents = ?, date = ?, paid_by = ? WHERE id = ?",
       )
-      .bind(input.description, input.amountCents, input.date, input.paidBy, id),
+      .bind(
+        input.description,
+        input.category ?? DEFAULT_CATEGORY,
+        input.amountCents,
+        input.date,
+        input.paidBy,
+        id,
+      ),
     db.prepare("DELETE FROM expense_splits WHERE expense_id = ?").bind(id),
     ...splits.map((s) =>
       db

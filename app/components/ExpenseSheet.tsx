@@ -1,6 +1,9 @@
 import { useState } from "react";
-import type { Expense, ExpenseInput, User } from "../../shared/types";
+import type { CategoryId, Expense, ExpenseInput, User } from "../../shared/types";
+import { CATEGORIES, DEFAULT_CATEGORY } from "../../shared/categories";
 import { MAX_AMOUNT_CENTS, formatCentsPlain, formatUsd, parseDollarsToCents } from "../../shared/money";
+import { CategoryIcon } from "./CategoryIcon";
+import { TrashIcon } from "./icons";
 import { Sheet } from "./Sheet";
 
 interface ExpenseSheetProps {
@@ -24,6 +27,7 @@ function todayLocal(): string {
 export function ExpenseSheet({ me, users, expense, onSubmit, onDelete, onClose }: ExpenseSheetProps) {
   const [amount, setAmount] = useState(expense ? formatCentsPlain(expense.amountCents) : "");
   const [description, setDescription] = useState(expense?.description ?? "");
+  const [category, setCategory] = useState<CategoryId>(expense?.category ?? DEFAULT_CATEGORY);
   const [date, setDate] = useState(expense?.date ?? todayLocal());
   const [paidBy, setPaidBy] = useState(expense?.paidBy ?? me.id);
   const [participants, setParticipants] = useState<Set<number>>(
@@ -68,6 +72,7 @@ export function ExpenseSheet({ me, users, expense, onSubmit, onDelete, onClose }
     try {
       await onSubmit({
         description: description.trim(),
+        category,
         amountCents: cents,
         date,
         paidBy,
@@ -101,7 +106,7 @@ export function ExpenseSheet({ me, users, expense, onSubmit, onDelete, onClose }
 
   return (
     <Sheet title={expense ? "Edit expense" : "Add expense"} onClose={onClose}>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <form onSubmit={handleSubmit} className="sheet-form">
         <div className="field">
           <label htmlFor="expense-amount">Amount</label>
           <input
@@ -125,6 +130,24 @@ export function ExpenseSheet({ me, users, expense, onSubmit, onDelete, onClose }
             placeholder="Groceries"
           />
         </div>
+
+        <fieldset className="field category-field">
+          <legend>Category</legend>
+          <div className="category-grid">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`category-chip${c.id === category ? " category-chip-selected" : ""}`}
+                aria-pressed={c.id === category}
+                onClick={() => setCategory(c.id)}
+              >
+                <CategoryIcon category={c.id} size={22} />
+                <span>{c.label}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
 
         <div className="field">
           <label htmlFor="expense-date">Date</label>
@@ -181,6 +204,7 @@ export function ExpenseSheet({ me, users, expense, onSubmit, onDelete, onClose }
         <div className="sheet-actions">
           {onDelete && (
             <button type="button" className="danger-button" onClick={handleDelete} disabled={submitting}>
+              <TrashIcon size={18} />
               Delete
             </button>
           )}

@@ -4,6 +4,7 @@
  * user-facing message — or `null` when the input is acceptable — so the
  * caller can respond `400` with that exact string.
  */
+import { isCategoryId } from "../shared/categories";
 import { MAX_AMOUNT_CENTS } from "../shared/money";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -30,7 +31,7 @@ export function validateExpense(input: unknown, userIds: Set<number>): string | 
   }
   const body = input as Record<string, unknown>;
 
-  const { amountCents, description, date, paidBy, participants } = body;
+  const { amountCents, category, description, date, paidBy, participants } = body;
 
   if (!isPositiveSafeInteger(amountCents)) {
     return "Enter an amount greater than zero.";
@@ -44,6 +45,12 @@ export function validateExpense(input: unknown, userIds: Set<number>): string | 
   }
   if (description.trim().length > 200) {
     return "Keep the description under 200 characters.";
+  }
+
+  // Absent is fine — db.ts stores DEFAULT_CATEGORY. Present but unrecognised
+  // is a bug in the caller, not something to silently paper over.
+  if (category !== undefined && !isCategoryId(category)) {
+    return "Pick a category from the list.";
   }
 
   if (typeof date !== "string" || !isRealDate(date)) {

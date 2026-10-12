@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { isAccentId } from "../shared/accents";
 import type { ExpenseInput, SettlementInput, User } from "../shared/types";
 import {
   clearedSessionCookie,
@@ -17,6 +18,7 @@ import {
   findUserByPasswordHash,
   listUsers,
   updateExpense,
+  updateUserAccent,
 } from "./db";
 import { buildState } from "./state";
 import { validateExpense, validateSettlement } from "./validate";
@@ -73,6 +75,26 @@ app.post("/api/logout", (c) => {
 
 app.get("/api/state", async (c) => {
   return c.json(await buildState(c.env.DB, c.get("user")));
+});
+
+/**
+ * Sets the signed-in user's accent colour.
+ *
+ * Deliberately scoped to the caller — there is no user id in the body, so one
+ * person cannot restyle somebody else's app.
+ */
+app.post("/api/accent", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { accent?: unknown } | null;
+  const accent = body?.accent;
+
+  if (!isAccentId(accent)) {
+    return c.json({ error: "Pick a colour from the list." }, 400);
+  }
+
+  const me = c.get("user");
+  await updateUserAccent(c.env.DB, me.id, accent);
+  // Re-read so `me` carries the new accent rather than the stale one.
+  return c.json(await buildState(c.env.DB, { ...me, accent }));
 });
 
 app.post("/api/expenses", async (c) => {

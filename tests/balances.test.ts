@@ -3,11 +3,11 @@ import type { Expense, Settlement, User } from "../shared/types";
 import { computeBalances } from "../src/lib/balances";
 
 const USERS: User[] = [
-  { id: 1, name: "Anuj" },
-  { id: 2, name: "Ruchi" },
+  { id: 1, name: "Anuj", accent: "teal" },
+  { id: 2, name: "Ruchi", accent: "teal" },
 ];
 
-const THREE: User[] = [...USERS, { id: 3, name: "Sam" }];
+const THREE: User[] = [...USERS, { id: 3, name: "Sam", accent: "teal" }];
 
 /** Builds an expense with shares split equally among `participants`. */
 function expense(
@@ -21,6 +21,7 @@ function expense(
   return {
     id,
     description: `expense ${id}`,
+    category: "food",
     amountCents,
     date: "2026-10-01",
     paidBy,

@@ -1,5 +1,7 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
+import { ACCENTS } from "../shared/accents";
+import { CATEGORIES } from "../shared/categories";
 import type { AppState } from "../shared/types";
 import { hashPassword } from "../src/auth";
 
@@ -223,6 +225,137 @@ describe("expenses", () => {
       });
       expect(response.status, JSON.stringify(body)).toBe(400);
       expect(await response.json()).toHaveProperty("error");
+    }
+  });
+});
+
+describe("accent", () => {
+  it("defaults to teal for a freshly seeded user", async () => {
+    const cookie = await signIn(ANUJ_PASSWORD);
+    const state = (await (await authed(cookie, "/api/state")).json()) as AppState;
+    expect(state.me.accent).toBe("teal");
+  });
+
+  it("stores each known accent and reports it back on me", async () => {
+    const cookie = await signIn(ANUJ_PASSWORD);
+    for (const { id } of ACCENTS) {
+      const state = (await (
+        await authed(cookie, "/api/accent", {
+          method: "POST",
+          body: JSON.stringify({ accent: id }),
+        })
+      ).json()) as AppState;
+      expect(state.me.accent).toBe(id);
+    }
+  });
+
+  it("persists across a fresh sign-in", async () => {
+    const first = await signIn(ANUJ_PASSWORD);
+    await authed(first, "/api/accent", {
+      method: "POST",
+      body: JSON.stringify({ accent: "pink" }),
+    });
+
+    const second = await signIn(ANUJ_PASSWORD);
+    const state = (await (await authed(second, "/api/state")).json()) as AppState;
+    expect(state.me.accent).toBe("pink");
+  });
+
+  it("only changes the caller's own accent", async () => {
+    const anuj = await signIn(ANUJ_PASSWORD);
+    await authed(anuj, "/api/accent", {
+      method: "POST",
+      body: JSON.stringify({ accent: "violet" }),
+    });
+
+    const ruchi = await signIn(RUCHI_PASSWORD);
+    const state = (await (await authed(ruchi, "/api/state")).json()) as AppState;
+    expect(state.me.accent).toBe("teal");
+    expect(state.users.find((u) => u.name === "Anuj")!.accent).toBe("violet");
+  });
+
+  it("rejects a colour that is not in the list", async () => {
+    const cookie = await signIn(ANUJ_PASSWORD);
+    for (const accent of ["", "chartreuse", 3, null, undefined]) {
+      const response = await authed(cookie, "/api/accent", {
+        method: "POST",
+        body: JSON.stringify({ accent }),
+      });
+      expect(response.status, JSON.stringify(accent)).toBe(400);
+    }
+  });
+
+  it("requires a session", async () => {
+    const response = await SELF.fetch("https://splitsies.test/api/accent", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accent: "blue" }),
+    });
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("categories", () => {
+  const base = {
+    description: "Dinner",
+    amountCents: 4000,
+    date: "2026-10-09",
+    paidBy: 1,
+    participants: [1, 2],
+  };
+
+  it("defaults to food when the category is omitted", async () => {
+    const cookie = await signIn(ANUJ_PASSWORD);
+    const state = (await (
+      await authed(cookie, "/api/expenses", {
+        method: "POST",
+        body: JSON.stringify(base),
+      })
+    ).json()) as AppState;
+    expect(state.expenses[0]!.category).toBe("food");
+  });
+
+  it("stores and returns each known category", async () => {
+    const cookie = await signIn(ANUJ_PASSWORD);
+    for (const { id } of CATEGORIES) {
+      const state = (await (
+        await authed(cookie, "/api/expenses", {
+          method: "POST",
+          body: JSON.stringify({ ...base, category: id }),
+        })
+      ).json()) as AppState;
+      // Newest first, so the one just created leads the list.
+      expect(state.expenses[0]!.category).toBe(id);
+    }
+  });
+
+  it("changes the category on edit", async () => {
+    const cookie = await signIn(ANUJ_PASSWORD);
+    const created = (await (
+      await authed(cookie, "/api/expenses", {
+        method: "POST",
+        body: JSON.stringify({ ...base, category: "food" }),
+      })
+    ).json()) as AppState;
+    const id = created.expenses[0]!.id;
+
+    const edited = (await (
+      await authed(cookie, `/api/expenses/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...base, category: "travel" }),
+      })
+    ).json()) as AppState;
+    expect(edited.expenses[0]!.category).toBe("travel");
+  });
+
+  it("rejects a category that is not in the list", async () => {
+    const cookie = await signIn(ANUJ_PASSWORD);
+    for (const category of ["", "FOOD", "crypto", 7, null]) {
+      const response = await authed(cookie, "/api/expenses", {
+        method: "POST",
+        body: JSON.stringify({ ...base, category }),
+      });
+      expect(response.status, JSON.stringify(category)).toBe(400);
     }
   });
 });

@@ -10,12 +10,20 @@ CREATE TABLE users (
   -- users sharing a password would make identity ambiguous. Seeding a duplicate
   -- fails loudly here instead of silently shadowing someone.
   password_hash TEXT NOT NULL UNIQUE,
+  -- One of the ids in shared/accents.ts. Per user rather than per device, so
+  -- the choice follows someone between their phone and their laptop.
+  accent        TEXT NOT NULL DEFAULT 'teal',
   created_at    TEXT NOT NULL
 );
 
 CREATE TABLE expenses (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   description  TEXT    NOT NULL,
+  -- One of the ids in shared/categories.ts. Plain text rather than a foreign
+  -- key to a categories table: the set is a fixed part of the UI, not user
+  -- data, and a lookup table would mean a join to recover a string we already
+  -- have. The DEFAULT means an expense can never end up with no category.
+  category     TEXT    NOT NULL DEFAULT 'food',
   amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
   -- 'YYYY-MM-DD'. A calendar day, not an instant: attaching a UTC time to "the
   -- day we bought groceries" only creates off-by-one display bugs.

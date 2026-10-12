@@ -1,30 +1,31 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "splitsies",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-01",
-
-  // The SPA and the API ship as one Worker on one origin, so session cookies
-  // need no CORS or SameSite=None handling. See docs/.../design.md.
-  "assets": {
-    "directory": "./dist/client",
-    "binding": "ASSETS",
-    // Any path that isn't a built asset returns index.html so the SPA boots.
-    "not_found_handling": "single-page-application",
-    // ...but /api/* must reach the Worker BEFORE the asset layer, or the SPA
-    // fallback above would swallow API calls and return HTML.
-    "run_worker_first": ["/api/*"]
-  },
-
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "splitsies",
-      // Replaced with the real id by `wrangler d1 create` — see DEPLOYMENT.md.
-      "database_id": "PLACEHOLDER_RUN_WRANGLER_D1_CREATE",
-      "migrations_dir": "migrations"
-    }
-  ],
-
-  "observability": { "enabled": true }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "splitsies",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-09-01",
+	// The SPA and the API ship as one Worker on one origin, so session cookies
+	// need no CORS or SameSite=None handling. See docs/.../design.md.
+	"assets": {
+		"directory": "./dist/client",
+		"binding": "ASSETS",
+		// Any path that isn't a built asset returns index.html so the SPA boots.
+		"not_found_handling": "single-page-application",
+		// ...but /api/* must reach the Worker BEFORE the asset layer, or the SPA
+		// fallback above would swallow API calls and return HTML.
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "splitsies",
+			// Replaced with the real id by `wrangler d1 create` — see DEPLOYMENT.md.
+			"database_id": "b6c954ef-e011-4706-b7b2-9c2869d2b434",
+			"migrations_dir": "migrations"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
 }

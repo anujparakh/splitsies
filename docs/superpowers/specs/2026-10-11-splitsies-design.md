@@ -15,6 +15,7 @@ free tier.
 - Record settlements so balances can be cleared after a real-world payback.
 - Password-gated, per-user passwords, session persisted in a cookie, with sign-out.
 - Mobile-first, simple, modern, elegant.
+- Each person can pick their own accent colour from a small fixed set.
 - USD only. No currency conversion.
 
 ## Non-Goals
@@ -78,6 +79,7 @@ users (
   id            INTEGER PRIMARY KEY,
   name          TEXT    NOT NULL UNIQUE,
   password_hash TEXT    NOT NULL UNIQUE,   -- base64url HMAC-SHA256(password, PASSWORD_PEPPER)
+  accent        TEXT    NOT NULL DEFAULT 'teal',  -- one of the ids in shared/accents.ts
   created_at    TEXT    NOT NULL           -- ISO-8601 UTC
 );
 
@@ -243,6 +245,7 @@ round trip keeps it feeling instant.
 | `POST /api/login`         | `{password}` → identifies the user, sets session cookie, returns `me`.  |
 | `POST /api/logout`        | Clears the cookie.                                                      |
 | `GET /api/state`          | `{me, users, expenses, settlements, balances}` — everything to render.   |
+| `POST /api/accent`        | `{accent}` → sets the **caller's own** accent. Returns fresh state.     |
 | `POST /api/expenses`      | Create. Returns fresh state.                                            |
 | `PUT /api/expenses/:id`   | Edit. Returns fresh state.                                              |
 | `DELETE /api/expenses/:id`| Delete (cascades splits). Returns fresh state.                          |
@@ -332,6 +335,42 @@ A router would be more code than it removes.
 
 **Decision: no global state library.** One `useState` holding the server's state
 object, refreshed from every mutation response.
+
+### Accent colours
+
+Six accents (teal, blue, green, violet, pink, amber), chosen per person.
+
+**Decision: stored per user in the database, not in `localStorage`.** The
+choice then follows someone from phone to laptop instead of being a per-device
+setting they must make twice. It costs one column and one endpoint.
+
+**Decision: only the id is shared; the colours live in CSS.** `shared/accents.ts`
+carries ids and labels, and `app/styles.css` defines each palette under
+`:root[data-accent="..."]`. The Worker has no reason to know what "pink" looks
+like, and keeping hex values in CSS lets every accent carry a full light *and*
+dark pair without duplicating it in TypeScript. Applying a theme is one
+attribute on `<html>`; every component already reads the accent tokens, so
+nothing else changes.
+
+**Decision: each accent defines a separate dark-mode value.** A colour with
+enough contrast on near-white is usually too dark on near-black. All twelve
+resulting combinations are verified at WCAG AA (≥4.5:1) against both their
+button text and their card background.
+
+**Decision: `POST /api/accent` takes no user id** — it always acts on the
+session's own user, so nobody can restyle someone else's app.
+
+### Icons
+
+Icon artwork comes from Phosphor (MIT), but the package is **not** a runtime
+dependency. `scripts/generate-icons.mjs` extracts the `regular` weight of just
+the icons in use into `app/components/icons.tsx`.
+
+**Decision: generate rather than import.** Each React icon in
+`@phosphor-icons/react` carries all six weights — measured at roughly 45 kB for
+this app's icon set, for art rendered at one weight. The generated file costs
+about 9 kB of source and adds no runtime dependency. `@phosphor-icons/react`
+stays a devDependency so the generator can be re-run.
 
 ## Error Handling
 

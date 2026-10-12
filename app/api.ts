@@ -1,3 +1,4 @@
+import type { AccentId } from "../shared/accents";
 import type {
   AppState,
   ApiError,
@@ -55,6 +56,8 @@ export const api = {
     request<{ me: User }>("/login", { method: "POST", body: { password } }),
   logout: () => request<{ ok: true }>("/logout", { method: "POST" }),
   state: () => request<AppState>("/state"),
+  setAccent: (accent: AccentId) =>
+    request<AppState>("/accent", { method: "POST", body: { accent } }),
   createExpense: (input: ExpenseInput) =>
     request<AppState>("/expenses", { method: "POST", body: input }),
   updateExpense: (id: number, input: ExpenseInput) =>

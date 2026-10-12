@@ -1,6 +1,9 @@
 import { Fragment, useMemo } from "react";
 import type { Expense, Settlement, User } from "../../shared/types";
+import { categoryLabel } from "../../shared/categories";
 import { formatUsd } from "../../shared/money";
+import { CategoryIcon } from "./CategoryIcon";
+import { CloseIcon, ReceiptIcon, SettlementIcon } from "./icons";
 
 interface ActivityFeedProps {
   me: User;
@@ -93,7 +96,12 @@ export function ActivityFeed({
   }, [expenses, settlements]);
 
   if (expenses.length === 0 && settlements.length === 0) {
-    return <p className="feed-empty">No expenses yet. Tap + to add the first one.</p>;
+    return (
+      <div className="feed-empty">
+        <ReceiptIcon size={32} />
+        <p>No expenses yet. Tap + to add the first one.</p>
+      </div>
+    );
   }
 
   return (
@@ -153,6 +161,10 @@ function ExpenseRow({
 
   return (
     <button type="button" className="feed-row" onClick={() => onSelect(expense)}>
+      <span className="feed-row-avatar" title={categoryLabel(expense.category)}>
+        <CategoryIcon category={expense.category} />
+        <span className="sr-only">{categoryLabel(expense.category)}</span>
+      </span>
       <span className="feed-row-main">
         <span className="feed-row-title">{expense.description}</span>
         <span className="feed-row-subtitle">{subtitle}</span>
@@ -173,6 +185,10 @@ function SettlementRow({
 }) {
   return (
     <div className="feed-row feed-row-static feed-row-settlement">
+      <span className="feed-row-avatar feed-row-avatar-settlement">
+        <SettlementIcon />
+        <span className="sr-only">Settlement</span>
+      </span>
       <span className="feed-row-main">
         <span className="feed-row-title">
           {nameOf(settlement.fromUser)} paid {nameOf(settlement.toUser)}
@@ -186,7 +202,7 @@ function SettlementRow({
         aria-label="Delete settlement"
         onClick={() => onDelete(settlement)}
       >
-        ✕
+        <CloseIcon size={18} />
       </button>
     </div>
   );
